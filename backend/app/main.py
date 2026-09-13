@@ -90,13 +90,26 @@ from pathlib import Path
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.routers import health, nodes, rooms, falls, sensing, websockets, ruview_compat
+
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+RUVIEW_UI_DIR = Path(__file__).resolve().parent.parent.parent / "ruview" / "ui"
 
 # Global API Key middleware if configured
 @app.middleware("http")
 async def api_key_auth_middleware(request: Request, call_next):
-    # Exempt health, docs, dashboard, static, and open endpoints
-    exempt_prefixes = ["/docs", "/openapi.json", "/redoc", "/api/health", "/static", "/ws"]
+    # Exempt health, docs, dashboard, static, ruview, and open endpoints
+    exempt_prefixes = [
+        "/docs",
+        "/openapi.json",
+        "/redoc",
+        "/api/health",
+        "/static",
+        "/ws",
+        "/ruview",
+        "/health",
+        "/api/v1",
+    ]
     if any(request.url.path.startswith(p) for p in exempt_prefixes) or request.url.path in ["/", "/dashboard"]:
         return await call_next(request)
 
@@ -117,6 +130,13 @@ app.include_router(sensing.router, prefix=settings.API_PREFIX)
 
 # Include WebSocket router at root (/ws/events)
 app.include_router(websockets.router)
+
+# Include RuView OpenSource Compatibility Router (serves /health/*, /api/v1/*, /ws/sensing)
+app.include_router(ruview_compat.router)
+
+# Mount RuView OpenSource Web UI at /ruview
+if RUVIEW_UI_DIR.exists():
+    app.mount("/ruview", StaticFiles(directory=str(RUVIEW_UI_DIR), html=True), name="ruview_ui")
 
 # Mount static files and dashboard routes
 if STATIC_DIR.exists():
