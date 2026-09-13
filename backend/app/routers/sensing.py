@@ -68,3 +68,46 @@ async def get_latest_sensing():
         fall_alert_active=fall_manager.has_active_falls(),
         total_persons_present=total_persons,
     )
+
+
+@router.post("/simulate-fall")
+async def simulate_fall(db: AsyncSession = Depends(get_db)):
+    """Simulate an edge fall event trigger (for UI testing)."""
+    # 3 consecutive frames to satisfy 3-frame debounce
+    event = None
+    for _ in range(3):
+        event = await fall_manager.process_vitals_frame(
+            node_id="1",
+            fall_detected=True,
+            motion=True,
+            motion_energy=1.85,
+            presence_score=8.5,
+            room_id="living_room",
+            db=db,
+        )
+    return {"status": "ok", "event_id": event.event_id if event else None}
+
+
+@router.post("/simulate-stream")
+async def simulate_stream(db: AsyncSession = Depends(get_db)):
+    """Simulate a single normal CSI vitals packet (for UI testing)."""
+    await node_tracker.observe_packet(
+        node_id="1",
+        packet_type="0xC5110002",
+        rssi=-52,
+        ip_address="192.168.1.105",
+        vitals_dict={
+            "presence": True,
+            "fall_detected": False,
+            "motion": True,
+            "breathing_rate_bpm": 16.5,
+            "heartrate_bpm": 72.0,
+            "n_persons": 1,
+            "motion_energy": 0.35,
+            "presence_score": 4.8,
+            "rssi": -52,
+            "timestamp_ms": int(datetime.now(timezone.utc).timestamp() * 1000),
+        },
+    )
+    return {"status": "ok"}
+

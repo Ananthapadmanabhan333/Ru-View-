@@ -86,12 +86,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from pathlib import Path
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+
 # Global API Key middleware if configured
 @app.middleware("http")
 async def api_key_auth_middleware(request: Request, call_next):
-    # Exempt health, docs, and open endpoints
-    exempt_paths = ["/docs", "/openapi.json", "/redoc", "/api/health"]
-    if any(request.url.path.startswith(p) for p in exempt_paths):
+    # Exempt health, docs, dashboard, static, and open endpoints
+    exempt_prefixes = ["/docs", "/openapi.json", "/redoc", "/api/health", "/static", "/ws"]
+    if any(request.url.path.startswith(p) for p in exempt_prefixes) or request.url.path in ["/", "/dashboard"]:
         return await call_next(request)
 
     if settings.API_KEY:
@@ -111,6 +117,16 @@ app.include_router(sensing.router, prefix=settings.API_PREFIX)
 
 # Include WebSocket router at root (/ws/events)
 app.include_router(websockets.router)
+
+# Mount static files and dashboard routes
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+    @app.get("/", include_in_schema=False)
+    @app.get("/dashboard", include_in_schema=False)
+    async def get_dashboard():
+        """Serve the real-time Fall Detection web and mobile dashboard."""
+        return FileResponse(STATIC_DIR / "index.html")
 
 
 if __name__ == "__main__":

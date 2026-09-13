@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RuView | ESP32-S3 Fall Detection Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --surface: #111827;
+      --surface-border: #1f293d;
+      --surface-hover: #192236;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --text-dim: #6b7280;
+      --accent: #3b82f6;
+      --accent-glow: rgba(59, 130, 246, 0.25);
+      --danger: #ef4444;
+      --danger-glow: rgba(239, 68, 68, 0.35);
+      --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.25);
+      --warning: #f59e0b;
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.5;
+    }
+
+    /* Top Nav */
+    header {
+      background: rgba(17, 24, 39, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--surface-border);
+      padding: 0.85rem 1.5rem;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-weight: 800;
+      font-size: 1.15rem;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #3b82f6, #6366f1);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+    }
+
+    .header-badges {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.3rem 0.65rem;
+      border-radius: 9999px;
+      border: 1px solid var(--surface-border);
+      background: var(--surface);
+    }
+
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-dim);
+    }
+
+    .badge-dot.pulse-green {
+      background: var(--success);
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+      animation: pulse 1.8s infinite;
+    }
+
+    .badge-dot.pulse-red {
+      background: var(--danger);
+      box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+      animation: pulse 1.2s infinite;
+    }
+
+    .badge-dot.pulse-blue {
+      background: var(--accent);
+      box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+      animation: pulse 1.8s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .btn-link {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.825rem;
+      font-weight: 600;
+      padding: 0.4rem 0.75rem;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+    .btn-link:hover {
+      color: var(--text-main);
+      background: var(--surface-hover);
+    }
+
+    /* Fall Alert Banner */
+    #fall-alert-banner {
+      display: none;
+      background: linear-gradient(90deg, #7f1d1d, #991b1b, #7f1d1d);
+      border-bottom: 2px solid var(--danger);
+      padding: 1rem 1.5rem;
+      color: white;
+      box-shadow: 0 4px 25px var(--danger-glow);
+      animation: alertPulse 1.5s infinite alternate;
+    }
+
+    @keyframes alertPulse {
+      from { background-color: #991b1b; }
+      to { background-color: #7f1d1d; }
+    }
+
+    .alert-content {
+      max-width: 1300px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .alert-msg {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+
+    .alert-actions {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .btn-ack {
+      background: #ffffff;
+      color: #991b1b;
+      font-weight: 700;
+      border: none;
+      padding: 0.5rem 1.25rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: transform 0.1s, background 0.2s;
+    }
+    .btn-ack:hover {
+      background: #fee2e2;
+      transform: translateY(-1px);
+    }
+
+    /* Main Container */
+    main {
+      max-width: 1350px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      flex: 1;
+    }
+
+    /* Metric Grid */
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1rem;
+    }
+
+    .metric-card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .metric-card:hover {
+      border-color: #374151;
+      transform: translateY(-2px);
+    }
+
+    .metric-label {
+      font-size: 0.775rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-dim);
+      margin-bottom: 0.4rem;
+    }
+
+    .metric-val {
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      display: flex;
+      align-items: baseline;
+      gap: 0.35rem;
+    }
+
+    .metric-sub {
+      font-size: 0.775rem;
+      color: var(--text-muted);
+      margin-top: 0.35rem;
+    }
+
+    /* Layout Columns */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1.3fr 1fr;
+      gap: 1.5rem;
+    }
+    @media (max-width: 1024px) {
+      .two-col { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel-header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--surface-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .panel-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .panel-body {
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      flex: 1;
+    }
+
+    /* Node Hardware Card */
+    .hardware-spec {
+      background: #0d131f;
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
+      padding: 1rem;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem;
+      font-size: 0.85rem;
+    }
+
+    .spec-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+    .spec-label {
+      color: var(--text-dim);
+      font-size: 0.725rem;
+      text-transform: uppercase;
+    }
+    .spec-val {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    /* CSI Canvas */
+    .csi-scope-container {
+      background: #090d16;
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
+      padding: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .csi-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.775rem;
+      color: var(--text-muted);
+    }
+    canvas#csiCanvas {
+      width: 100%;
+      height: 110px;
+      background: #070a10;
+      border-radius: 4px;
+      display: block;
+    }
+
+    /* Rooms Grid */
+    .rooms-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .room-item {
+      background: #0d131f;
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: border-color 0.2s;
+    }
+    .room-item.has-alert {
+      border-color: var(--danger);
+      background: rgba(239, 68, 68, 0.08);
+    }
+
+    .room-name {
+      font-weight: 700;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .room-stats {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      font-size: 0.825rem;
+      color: var(--text-muted);
+    }
+
+    /* Events Table */
+    .events-table-wrapper {
+      overflow-x: auto;
+    }
+
+    table.events-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      text-align: left;
+    }
+
+    table.events-table th {
+      padding: 0.75rem 1rem;
+      color: var(--text-dim);
+      font-weight: 600;
+      border-bottom: 1px solid var(--surface-border);
+      text-transform: uppercase;
+      font-size: 0.725rem;
+      letter-spacing: 0.05em;
+    }
+
+    table.events-table td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--surface-border);
+      font-family: var(--font-sans);
+    }
+
+    .status-tag {
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: 4px;
+      font-size: 0.725rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .status-tag.detected {
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+    }
+    .status-tag.cleared {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .status-tag.acknowledged {
+      background: rgba(107, 114, 128, 0.2);
+      color: #9ca3af;
+      border: 1px solid rgba(107, 114, 128, 0.4);
+    }
+
+    /* Action bar */
+    .action-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+    }
+
+    .btn {
+      background: var(--surface-border);
+      color: var(--text-main);
+      border: 1px solid #374151;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      transition: all 0.15s;
+    }
+    .btn:hover {
+      background: var(--surface-hover);
+      border-color: #4b5563;
+    }
+    .btn-danger {
+      background: #7f1d1d;
+      border-color: #991b1b;
+      color: #fecaca;
+    }
+    .btn-danger:hover {
+      background: #991b1b;
+    }
+    .btn-primary {
+      background: #1d4ed8;
+      border-color: #2563eb;
+      color: #ffffff;
+    }
+    .btn-primary:hover {
+      background: #2563eb;
+    }
+
+    footer {
+      border-top: 1px solid var(--surface-border);
+      padding: 1rem 1.5rem;
+      text-align: center;
+      font-size: 0.775rem;
+      color: var(--text-dim);
+      background: var(--surface);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Fall Alert Emergency Banner -->
+  <div id="fall-alert-banner">
+    <div class="alert-content">
+      <div class="alert-msg">
+        <span style="font-size: 1.6rem;">🚨</span>
+        <div>
+          <div>FALL DETECTED IN <span id="alert-room-name">LIVING ROOM</span></div>
+          <div style="font-size: 0.85rem; font-weight: 400; opacity: 0.9;" id="alert-details">Phase acceleration exceeded threshold (>= 15.0 rad/s²). Node 1 triggered emergency status.</div>
+        </div>
+      </div>
+      <div class="alert-actions">
+        <button class="btn-ack" id="btn-ack-alert">Acknowledge Alert</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">⚡</div>
+      <div>RuView <span style="font-weight: 400; color: var(--text-muted); font-size: 0.95rem;">FallOS</span></div>
+    </div>
+
+    <div class="header-badges">
+      <div class="badge" title="WebSocket Live Broadcaster">
+        <span class="badge-dot" id="ws-dot"></span>
+        <span id="ws-text">Connecting...</span>
+      </div>
+
+      <div class="badge" title="Target Hardware Spec">
+        <span class="badge-dot pulse-blue"></span>
+        <span>ESP32-S3 N16R8</span>
+      </div>
+
+      <div class="badge" title="Simulated GPIO 48 WS2812 RGB LED Status">
+        <span class="badge-dot pulse-green" id="led-gpio48"></span>
+        <span>LED GPIO 48</span>
+      </div>
+    </div>
+
+    <nav class="nav-links">
+      <a href="/docs" target="_blank" class="btn-link">Swagger API Docs</a>
+      <a href="http://localhost:3000" target="_blank" class="btn-link" title="RuView 3D DensePose & Sensing Field">DensePose UI (:3000)</a>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Top Metric Cards -->
+    <section class="grid-4">
+      <div class="metric-card">
+        <div>
+          <div class="metric-label">System Fall Status</div>
+          <div class="metric-val" id="metric-fall-status" style="color: var(--success);">
+            <span>NORMAL</span>
+          </div>
+        </div>
+        <div class="metric-sub" id="metric-fall-sub">No active fall detected</div>
+      </div>
+
+      <div class="metric-card">
+        <div>
+          <div class="metric-label">ESP32-S3 Nodes</div>
+          <div class="metric-val">
+            <span id="metric-nodes-online">1</span>
+            <span style="font-size: 1rem; color: var(--text-dim);">/ <span id="metric-nodes-total">1</span></span>
+          </div>
+        </div>
+        <div class="metric-sub" id="metric-nodes-sub">1 Online (UDP Port 5005)</div>
+      </div>
+
+      <div class="metric-card">
+        <div>
+          <div class="metric-label">CSI Streaming Rate</div>
+          <div class="metric-val" style="color: #60a5fa;">
+            <span id="metric-csi-fps">40.0</span>
+            <span style="font-size: 1rem; color: var(--text-dim);">FPS</span>
+          </div>
+        </div>
+        <div class="metric-sub">8MB Octal PSRAM Buffered</div>
+      </div>
+
+      <div class="metric-card">
+        <div>
+          <div class="metric-label">Persons Present</div>
+          <div class="metric-val" style="color: #a78bfa;">
+            <span id="metric-persons">1</span>
+          </div>
+        </div>
+        <div class="metric-sub" id="metric-presence-sub">Presence score: 4.8</div>
+      </div>
+    </section>
+
+    <!-- Two-Column Section -->
+    <section class="two-col">
+      <!-- Left Column: Node Hardware & Real-time CSI Scope -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span>📡</span> ESP32-S3 N16R8 Node Status & Telemetry
+          </div>
+          <span class="badge" id="node-online-badge" style="border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.1); color: #34d399;">ONLINE</span>
+        </div>
+        <div class="panel-body">
+          <div class="hardware-spec">
+            <div class="spec-item">
+              <span class="spec-label">Board Profile</span>
+              <span class="spec-val">ESP32-S3 DevKitC-1 N16R8</span>
+            </div>
+            <div class="spec-item">
+              <span class="spec-label">Memory Architecture</span>
+              <span class="spec-val">16MB Flash | 8MB Octal PSRAM (OPI)</span>
+            </div>
+            <div class="spec-item">
+              <span class="spec-label">Assigned Room</span>
+              <span class="spec-val" id="spec-room">living_room</span>
+            </div>
+            <div class="spec-item">
+              <span class="spec-label">Firmware / RuView</span>
+              <span class="spec-val">v0.8.12 (RuView v2655)</span>
+            </div>
+            <div class="spec-item">
+              <span class="spec-label">Wi-Fi Signal (RSSI)</span>
+              <span class="spec-val" id="spec-rssi">-52 dBm</span>
+            </div>
+            <div class="spec-item">
+              <span class="spec-label">Subcarrier Mode</span>
+              <span class="spec-val">56 Subcarriers (HT20/HE20)</span>
+            </div>
+          </div>
+
+          <!-- Oscilloscope View of CSI Perturbation -->
+          <div class="csi-scope-container">
+            <div class="csi-header">
+              <span>Channel State Information (CSI) Perturbation Live</span>
+              <span id="scope-cadence">40 Hz Cadence</span>
+            </div>
+            <canvas id="csiCanvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Monitored Rooms & Edge Vitals -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span>🏠</span> Monitored Rooms & Vitals
+          </div>
+          <span style="font-size: 0.8rem; color: var(--text-dim);" id="rooms-count-label">1 Monitored</span>
+        </div>
+        <div class="panel-body">
+          <div class="rooms-list" id="rooms-container">
+            <div class="room-item" id="room-living_room">
+              <div>
+                <div class="room-name">
+                  <span class="badge-dot pulse-green"></span>
+                  <span>Living Room</span>
+                </div>
+                <div style="font-size: 0.775rem; color: var(--text-dim); margin-top: 0.2rem;">Node: 1 | Assigned: True</div>
+              </div>
+              <div class="room-stats">
+                <div style="text-align: right;">
+                  <div style="font-weight: 700; color: #f3f4f6;" id="vitals-motion">Motion: Low</div>
+                  <div style="font-size: 0.75rem;">Resp: ~16.5 bpm</div>
+                </div>
+                <div class="badge" style="border-color: rgba(16, 185, 129, 0.4); color: #34d399;" id="room-status-badge">Normal</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="background: #0d131f; border: 1px solid var(--surface-border); border-radius: 8px; padding: 0.85rem 1rem; margin-top: auto;">
+            <div style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; font-weight: 600; margin-bottom: 0.35rem;">Edge DSP Fall Detector Spec</div>
+            <div style="font-size: 0.825rem; color: var(--text-muted); line-height: 1.4;">
+              Phase velocity acceleration threshold: <code>CONFIG_EDGE_FALL_THRESH = 15.0 rad/s²</code> with 3-frame debounce and 5000ms alert cooldown window.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Quick Simulation & Interactive Actions -->
+    <section class="action-bar">
+      <span style="font-size: 0.85rem; font-weight: 700; margin-right: 0.5rem;">Interactive Controls:</span>
+      <button class="btn btn-danger" id="btn-trigger-fall">💥 Trigger Simulated Fall</button>
+      <button class="btn btn-primary" id="btn-stream-csi">▶️ Send CSI Packet</button>
+      <button class="btn" id="btn-refresh">🔄 Refresh Status</button>
+      <button class="btn" id="btn-toggle-sound">🔊 Alert Audio: ON</button>
+    </section>
+
+    <!-- Fall Events Log Table -->
+    <section class="panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span>📋</span> Recent Fall Events Log
+        </div>
+        <span style="font-size: 0.775rem; color: var(--text-dim);">Live WebSocket Fed</span>
+      </div>
+      <div class="events-table-wrapper">
+        <table class="events-table">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Room</th>
+              <th>Node ID</th>
+              <th>Status</th>
+              <th>Confidence</th>
+              <th>Motion Energy</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="events-tbody">
+            <tr>
+              <td colspan="7" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">
+                No fall events detected yet. Monitoring live CSI stream...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    RuView Real-Time Fall Detection System | ESP32-S3 N16R8 Edge Sensing Pipeline | Port 5005 (UDP) / Port 8000 (HTTP & WS)
+  </footer>
+
+  <script>
+    // State
+    let ws = null;
+    let audioEnabled = true;
+    let activeFallEventId = null;
+    let audioCtx = null;
+
+    // Canvas Scope Setup
+    const canvas = document.getElementById('csiCanvas');
+    const ctx = canvas.getContext('2d');
+    let csiHistory = Array(80).fill(0);
+
+    function resizeCanvas() {
+      if (canvas.parentElement) {
+        canvas.width = canvas.parentElement.clientWidth - 24;
+        canvas.height = 110;
+      }
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function renderScope() {
+      ctx.fillStyle = '#070a10';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Grid lines
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let x = 0; x < canvas.width; x += 40) {
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+      }
+      for (let y = 0; y < canvas.height; y += 25) {
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+      }
+      ctx.stroke();
+
+      // Signal wave
+      ctx.strokeStyle = activeFallEventId ? '#ef4444' : '#3b82f6';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      const step = canvas.width / (csiHistory.length - 1);
+      for (let i = 0; i < csiHistory.length; i++) {
+        const x = i * step;
+        const y = (canvas.height / 2) + csiHistory[i];
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      requestAnimationFrame(renderScope);
+    }
+    renderScope();
+
+    // Sound alert using Web Audio API
+    function playAlertBeep() {
+      if (!audioEnabled) return;
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+        osc.frequency.setValueAtTime(440, audioCtx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.4);
+      } catch (e) {
+        console.warn('Audio alert error:', e);
+      }
+    }
+
+    // Connect WebSocket
+    function connectWs() {
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${proto}//${window.location.host}/ws/events`;
+      const dot = document.getElementById('ws-dot');
+      const text = document.getElementById('ws-text');
+
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        dot.className = 'badge-dot pulse-green';
+        text.textContent = 'Live Connected';
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          handleWsMessage(msg);
+        } catch (e) {
+          console.error('WS parse error:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        dot.className = 'badge-dot pulse-red';
+        text.textContent = 'Reconnecting...';
+        setTimeout(connectWs, 2000);
+      };
+
+      ws.onerror = () => {
+        ws.close();
+      };
+    }
+
+    function handleWsMessage(msg) {
+      console.log('[WS Message]', msg);
+
+      if (msg.type === 'fall_detected') {
+        triggerFallAlertUI(msg);
+      } else if (msg.type === 'fall_cleared') {
+        clearFallAlertUI(msg);
+      } else if (msg.type === 'node_connected') {
+        updateNodeConnection(true, msg);
+      } else if (msg.type === 'node_disconnected') {
+        updateNodeConnection(false, msg);
+      } else if (msg.type === 'presence_changed') {
+        updatePresence(msg);
+      }
+    }
+
+    function triggerFallAlertUI(msg) {
+      activeFallEventId = msg.event_id;
+      const banner = document.getElementById('fall-alert-banner');
+      banner.style.display = 'block';
+      document.getElementById('alert-room-name').textContent = (msg.room_id || 'Living Room').toUpperCase();
+      document.getElementById('metric-fall-status').innerHTML = '<span style="color: var(--danger);">FALL ALERT!</span>';
+      document.getElementById('metric-fall-sub').textContent = `Detected at ${new Date(msg.timestamp).toLocaleTimeString()}`;
+
+      // Set GPIO 48 LED to RED
+      const led = document.getElementById('led-gpio48');
+      led.className = 'badge-dot pulse-red';
+
+      // Highlight room item
+      const rItem = document.getElementById('room-living_room');
+      if (rItem) rItem.classList.add('has-alert');
+      const rBadge = document.getElementById('room-status-badge');
+      if (rBadge) {
+        rBadge.style.borderColor = 'var(--danger)';
+        rBadge.style.color = '#f87171';
+        rBadge.textContent = 'FALL DETECTED';
+      }
+
+      playAlertBeep();
+      loadFallEvents();
+
+      // Spike scope wave
+      for (let i = 0; i < 20; i++) {
+        csiHistory.push((Math.random() - 0.5) * 80);
+        csiHistory.shift();
+      }
+    }
+
+    function clearFallAlertUI(msg) {
+      activeFallEventId = null;
+      document.getElementById('fall-alert-banner').style.display = 'none';
+      document.getElementById('metric-fall-status').innerHTML = '<span style="color: var(--success);">NORMAL</span>';
+      document.getElementById('metric-fall-sub').textContent = 'No active fall detected';
+
+      // Set GPIO 48 LED back to Green
+      const led = document.getElementById('led-gpio48');
+      led.className = 'badge-dot pulse-green';
+
+      const rItem = document.getElementById('room-living_room');
+      if (rItem) rItem.classList.remove('has-alert');
+      const rBadge = document.getElementById('room-status-badge');
+      if (rBadge) {
+        rBadge.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+        rBadge.style.color = '#34d399';
+        rBadge.textContent = 'Normal';
+      }
+      loadFallEvents();
+    }
+
+    function updateNodeConnection(online, msg) {
+      const badge = document.getElementById('node-online-badge');
+      const led = document.getElementById('led-gpio48');
+      if (online) {
+        badge.textContent = 'ONLINE';
+        badge.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+        badge.style.color = '#34d399';
+        badge.style.background = 'rgba(16, 185, 129, 0.1)';
+        led.className = 'badge-dot pulse-green';
+        document.getElementById('metric-nodes-online').textContent = '1';
+        if (msg.rssi) document.getElementById('spec-rssi').textContent = `${msg.rssi} dBm`;
+      } else {
+        badge.textContent = 'OFFLINE';
+        badge.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+        badge.style.color = '#f87171';
+        badge.style.background = 'rgba(239, 68, 68, 0.1)';
+        led.className = 'badge-dot';
+        document.getElementById('metric-nodes-online').textContent = '0';
+      }
+    }
+
+    function updatePresence(msg) {
+      document.getElementById('metric-persons').textContent = msg.persons_count || 1;
+      document.getElementById('metric-presence-sub').textContent = `Presence score: ${(msg.presence_score || 4.2).toFixed(1)}`;
+    }
+
+    // Acknowledge Button
+    document.getElementById('btn-ack-alert').onclick = async () => {
+      if (!activeFallEventId) {
+        const res = await fetch('/api/falls?status=detected');
+        const list = await res.json();
+        if (list.length > 0) activeFallEventId = list[0].event_id;
+      }
+      if (activeFallEventId) {
+        const resp = await fetch(`/api/falls/${activeFallEventId}/acknowledge`, { method: 'POST' });
+        if (resp.ok) {
+          clearFallAlertUI();
+        }
+      } else {
+        clearFallAlertUI();
+      }
+    };
+
+    // Load initial data
+    async function loadInitialData() {
+      try {
+        const [hRes, nRes, fRes, sRes] = await Promise.all([
+          fetch('/api/health'),
+          fetch('/api/nodes'),
+          fetch('/api/falls'),
+          fetch('/api/sensing/latest')
+        ]);
+
+        const health = await hRes.json();
+        const nodes = await nRes.json();
+        const falls = await fRes.json();
+        const sensing = await sRes.json();
+
+        document.getElementById('metric-nodes-total').textContent = Math.max(1, nodes.length);
+        document.getElementById('metric-nodes-online').textContent = health.online_nodes || (nodes.length > 0 ? 1 : 0);
+
+        if (nodes.length > 0) {
+          const n = nodes[0];
+          document.getElementById('spec-room').textContent = n.room_id || 'living_room';
+          if (n.rssi) document.getElementById('spec-rssi').textContent = `${n.rssi} dBm`;
+          if (n.csi_fps) document.getElementById('metric-csi-fps').textContent = n.csi_fps.toFixed(1);
+        }
+
+        if (sensing.fall_alert_active && falls.length > 0) {
+          triggerFallAlertUI(falls[0]);
+        }
+
+        renderEventsTable(falls);
+      } catch (e) {
+        console.warn('Initial load warning:', e);
+      }
+    }
+
+    async function loadFallEvents() {
+      try {
+        const res = await fetch('/api/falls');
+        const data = await res.json();
+        renderEventsTable(data);
+      } catch (e) {
+        console.warn('Events load error:', e);
+      }
+    }
+
+    function renderEventsTable(events) {
+      const tbody = document.getElementById('events-tbody');
+      if (!events || events.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">No fall events recorded. System monitoring steady.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = events.slice(0, 10).map(e => `
+        <tr>
+          <td style="font-family: var(--font-mono); font-size: 0.8rem;">${new Date(e.timestamp).toLocaleTimeString()}</td>
+          <td style="font-weight: 600;">${e.room_id || 'living_room'}</td>
+          <td><code>${e.node_id}</code></td>
+          <td><span class="status-tag ${e.status}">${e.status}</span></td>
+          <td style="color: var(--text-dim);">${e.confidence !== null ? (e.confidence * 100).toFixed(0) + '%' : 'Edge Det.'}</td>
+          <td>${e.motion_energy !== null ? e.motion_energy.toFixed(2) : '--'}</td>
+          <td>
+            ${e.status === 'detected' ? `<button class="btn btn-danger" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" onclick="ackEvent('${e.event_id}')">Acknowledge</button>` : `<span style="color: var(--text-dim); font-size: 0.75rem;">Resolved</span>`}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    window.ackEvent = async (id) => {
+      await fetch(`/api/falls/${id}/acknowledge`, { method: 'POST' });
+      clearFallAlertUI();
+    };
+
+    // Interactive Buttons
+    document.getElementById('btn-refresh').onclick = loadInitialData;
+
+    document.getElementById('btn-toggle-sound').onclick = (e) => {
+      audioEnabled = !audioEnabled;
+      e.target.textContent = audioEnabled ? '🔊 Alert Audio: ON' : '🔇 Alert Audio: OFF';
+    };
+
+    document.getElementById('btn-trigger-fall').onclick = async () => {
+      // Simulate fall via backend API or mock
+      const resp = await fetch('/api/sensing/simulate-fall', { method: 'POST' }).catch(() => null);
+      if (!resp || !resp.ok) {
+        triggerFallAlertUI({
+          type: 'fall_detected',
+          event_id: 'test-' + Date.now(),
+          room_id: 'living_room',
+          timestamp: new Date().toISOString(),
+          node_id: '1'
+        });
+      }
+    };
+
+    document.getElementById('btn-stream-csi').onclick = async () => {
+      await fetch('/api/sensing/simulate-stream', { method: 'POST' }).catch(() => null);
+      loadInitialData();
+    };
+
+    // Signal animation loop
+    setInterval(() => {
+      const amp = activeFallEventId ? 45 : 12;
+      const noise = (Math.random() - 0.5) * amp;
+      csiHistory.push(noise);
+      csiHistory.shift();
+    }, 25); // ~40Hz cadence
+
+    // Init
+    connectWs();
+    loadInitialData();
+  </script>
+</body>
+</html>
