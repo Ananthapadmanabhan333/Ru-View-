@@ -278,9 +278,9 @@ class StandaloneUdpProtocol(asyncio.DatagramProtocol):
         node_id_str = str(getattr(parsed, "node_id", "unknown"))
         if isinstance(parsed, RawCsiFrame):
             state.nodes[node_id_str] = {
-                "mac": parsed.mac,
+                "mac": f"ESP32-S3-{node_id_str}",
                 "rssi": parsed.rssi_dbm,
-                "subcarriers": parsed.subcarrier_count,
+                "subcarriers": parsed.n_subcarriers,
                 "last_seen": time.time(),
             }
         elif isinstance(parsed, EdgeVitalsPacket):
