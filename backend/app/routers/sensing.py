@@ -27,6 +27,7 @@ async def get_latest_sensing():
                 NodeResponse(
                     node_id=state.node_id,
                     room_id=state.room_id,
+                    board_type=state.board_type,
                     status=state.status,
                     last_seen=state.last_seen,
                     rssi=state.rssi,

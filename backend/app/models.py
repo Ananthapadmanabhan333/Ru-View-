@@ -35,6 +35,7 @@ class Node(Base):
     __tablename__ = "nodes"
 
     node_id = Column(String(64), primary_key=True, index=True)
+    board_type = Column(String(32), default="esp32s3_n16r8", nullable=False)
     mac_address = Column(String(32), nullable=True)
     ip_address = Column(String(64), nullable=True)
     room_id = Column(String(64), ForeignKey("rooms.id", ondelete="SET NULL"), nullable=True)

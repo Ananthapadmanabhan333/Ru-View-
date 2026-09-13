@@ -2,13 +2,14 @@
 """ESP32-S3 CSI and Vitals packet simulator.
 
 Sends genuine bit-exact RuView binary packets over UDP to test the backend pipeline:
-- ADR-018 raw CSI frames (magic 0xC5110001) at 20 Hz
+- ADR-018 raw CSI frames (magic 0xC5110001) at 40 Hz (ESP32-S3 N16R8) or 20 Hz (4MB)
 - ADR-039 edge vitals (magic 0xC5110002) at 1 Hz
 - Controlled fall trigger (flags |= 0x02) for testing alerts and WebSockets
+- Simulated GPIO 48 WS2812 RGB LED telemetry (DevKitC-1 / N16R8)
 
 Usage:
-    python sim_esp32_stream.py --target-ip 127.0.0.1 --target-port 5005 --node-id 1
-    python sim_esp32_stream.py --trigger-fall
+    python sim_esp32_stream.py --target-ip 127.0.0.1 --target-port 5005 --node-id 1 --board esp32s3_n16r8
+    python sim_esp32_stream.py --trigger-fall --node-id 1
 """
 import argparse
 import math
@@ -101,6 +102,13 @@ def main():
     parser.add_argument("--target-ip", default="127.0.0.1", help="Backend UDP IP")
     parser.add_argument("--target-port", type=int, default=5005, help="Backend UDP Port")
     parser.add_argument("--node-id", type=int, default=1, help="Simulated Node ID")
+    parser.add_argument(
+        "--board",
+        default="esp32s3_n16r8",
+        choices=["esp32s3_n16r8", "esp32s3_4mb"],
+        help="Target hardware profile (esp32s3_n16r8 or esp32s3_4mb)",
+    )
+    parser.add_argument("--fps", type=float, default=None, help="CSI streaming frame rate (default: 40Hz for N16R8, 20Hz for 4MB)")
     parser.add_argument("--trigger-fall", action="store_true", help="Trigger immediate fall event")
     parser.add_argument("--duration", type=int, default=0, help="Run duration in seconds (0 = forever)")
     args = parser.parse_args()
@@ -108,10 +116,33 @@ def main():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     dest = (args.target_ip, args.target_port)
 
-    print(f"[*] Simulating ESP32-S3 Node {args.node_id} -> UDP {dest[0]}:{dest[1]}")
+    # Board-specific configurations
+    if args.board == "esp32s3_n16r8":
+        default_fps = 40.0
+        led_pin = 48
+        psram_desc = "8MB Octal PSRAM (OPI)"
+        flash_desc = "16MB Flash"
+    else:
+        default_fps = 20.0
+        led_pin = 21
+        psram_desc = "None (Internal SRAM only)"
+        flash_desc = "4MB Flash"
+
+    fps = args.fps if args.fps is not None else default_fps
+    sleep_interval = 1.0 / fps if fps > 0 else 0.025
+    n_subcarriers = 56
+
+    print("=" * 65)
+    print(f"[*] RuView ESP32-S3 Stream Simulator")
+    print(f"[*] Target Board     : {args.board.upper()} ({flash_desc}, {psram_desc})")
+    print(f"[*] Onboard RGB LED  : GPIO {led_pin}")
+    print(f"[*] Node ID          : {args.node_id}")
+    print(f"[*] CSI Rate         : {fps} Hz (subcarriers: {n_subcarriers})")
+    print(f"[*] UDP Destination  : {dest[0]}:{dest[1]}")
+    print("=" * 65)
 
     if args.trigger_fall:
-        print("[!] Sending simulated FALL event (3 consecutive frames)...")
+        print(f"[!] [LED GPIO {led_pin}: RED (0xFF0000)] Triggering simulated FALL event (3 consecutive frames)...")
         for i in range(3):
             pkt = build_edge_vitals_packet(
                 node_id=args.node_id,
@@ -123,14 +154,14 @@ def main():
             )
             sock.sendto(pkt, dest)
             time.sleep(0.05)
-        print("[+] Fall packet sequence sent.")
+        print(f"[+] Fall packet sequence sent to {dest[0]}:{dest[1]}.")
         return
 
     seq = 0
     start_time = time.time()
     last_vitals_time = 0.0
 
-    print("[*] Streaming raw CSI (20 Hz) and vitals (1 Hz). Press Ctrl+C to stop.")
+    print(f"[*] [LED GPIO {led_pin}: GREEN (0x00FF00)] Streaming raw CSI ({fps} Hz) and vitals (1 Hz). Press Ctrl+C to stop.")
 
     try:
         while True:
@@ -138,8 +169,12 @@ def main():
             if args.duration > 0 and (now - start_time) > args.duration:
                 break
 
-            # Send raw CSI frame (~20 Hz)
-            raw_frame = build_raw_csi_frame(node_id=args.node_id, seq=seq)
+            # Send raw CSI frame
+            raw_frame = build_raw_csi_frame(
+                node_id=args.node_id,
+                seq=seq,
+                n_subcarriers=n_subcarriers,
+            )
             sock.sendto(raw_frame, dest)
             seq += 1
 
@@ -157,11 +192,11 @@ def main():
                 )
                 sock.sendto(vitals, dest)
                 last_vitals_time = now
-                print(f"[>] Vitals sent (Node {args.node_id}, Seq {seq})")
+                print(f"[>] Vitals sent (Node {args.node_id}, Seq {seq}, LED GPIO {led_pin}: GREEN)")
 
-            time.sleep(0.05)  # 20 Hz cadence
+            time.sleep(sleep_interval)
     except KeyboardInterrupt:
-        print("\n[*] Stopping simulation.")
+        print(f"\n[*] [LED GPIO {led_pin}: OFF] Stopping simulation.")
     finally:
         sock.close()
 

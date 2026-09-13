@@ -22,6 +22,7 @@ class FallStatus(str, Enum):
 class NodeBase(BaseModel):
     node_id: str
     room_id: Optional[str] = None
+    board_type: str = "esp32s3_n16r8"
     mac_address: Optional[str] = None
     firmware_version: str = "0.8.12"
     ruview_version: str = "v2655"
@@ -29,6 +30,7 @@ class NodeBase(BaseModel):
 
 class NodeRegisterRequest(BaseModel):
     room_id: Optional[str] = Field(None, description="Room identifier to associate node with")
+    board_type: Optional[str] = Field("esp32s3_n16r8", description="Hardware board profile (e.g. esp32s3_n16r8)")
     mac_address: Optional[str] = Field(None, description="MAC address of the node")
     firmware_version: Optional[str] = Field("0.8.12", description="Firmware version running on node")
 

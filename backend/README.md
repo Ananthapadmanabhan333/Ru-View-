@@ -8,13 +8,14 @@ Production-ready backend service connecting ESP32-S3 CSI sensor nodes to web and
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                    ESP32-S3 SuperMini                        │
-│                 (4 MB Flash, 2.4 GHz Wi-Fi)                  │
-│  - WiFi CSI Driver (Core 0)                                  │
+│                    ESP32-S3 N16R8                            │
+│     (16 MB Flash, 8 MB Octal PSRAM OPI, GPIO 48 RGB LED)     │
+│  - WiFi CSI Driver (Core 0): 56 subcarrier capture @ 40-50Hz │
 │  - Edge DSP Pipeline (Core 1): Phase Accel Fall Detector     │
+│  - Onboard WS2812 RGB LED (GPIO 48): Status & Fall Alarms    │
 └──────────────┬───────────────────────────────────────────────┘
                │
-               │ 2.4 GHz Wi-Fi (UDP Datagrams)
+               │ 2.4 GHz Wi-Fi (UDP Datagrams / Port 5005)
                ▼
 ┌──────────────────────────────────────────────────────────────┐
 │                   Dual-Mode Ingestion Pipeline               │
@@ -53,9 +54,12 @@ Production-ready backend service connecting ESP32-S3 CSI sensor nodes to web and
 
 ## 2. Hardware Target
 
-- **Board**: ESP32-S3 SuperMini (or ESP32-S3 DevKitC-1)
-- **Flash Variant**: 4 MB Flash (Quad SPI / DIO)
-- **Wi-Fi**: 2.4 GHz 802.11b/g/n
+- **Board**: ESP32-S3 N16R8 (e.g. ESP32-S3 DevKitC-1 v1.1 or compatible N16R8 module)
+- **Flash Variant**: 16 MB Quad SPI Flash (`N16`)
+- **PSRAM Variant**: 8 MB Octal SPI PSRAM (`R8` / OPI mode)
+- **Status Indicator**: Onboard Addressable WS2812 RGB LED on **GPIO 48**
+- **Wi-Fi**: 2.4 GHz 802.11b/g/n (HT20 / HE20, 56 subcarriers)
+- **Throughput Advantage**: The 8 MB Octal PSRAM buffers full CSI FIFO frames, unlocking **40–50 fps** streaming rate without memory starvation or dropped packets.
 - **Host**: Linux / Raspberry Pi / macOS / Windows server
 
 ---
@@ -64,7 +68,8 @@ Production-ready backend service connecting ESP32-S3 CSI sensor nodes to web and
 
 - **RuView Core**: `v2655` (commit `33a9e908`)
 - **Firmware Version**: `0.8.12` (source in `ruview/firmware/esp32-csi-node`)
-- **Verified Pre-built Binary Bundle**: `v0.8.8` / `v0.6.7` in `release_bins/esp32-csi-node-4mb.bin`
+- **Release S3 Binary**: `ruview/firmware/esp32-csi-node/release_bins/esp32-csi-node.bin` (1.12 MB full feature build)
+- **Release Bootloader & Partition Table**: `bootloader.bin` and `partition-table.bin`
 
 ---
 
@@ -78,6 +83,7 @@ Fall detection is processed across both the edge device and the host:
    - **Threshold**: `CONFIG_EDGE_FALL_THRESH` = `15000` (15.0 rad/s²)
    - **Debounce**: `EDGE_FALL_CONSEC_MIN` = 3 consecutive frames
    - **Cooldown**: `EDGE_FALL_COOLDOWN_MS` = 5000 ms between alerts
+   - **LED Indication**: Pulses RGB LED on GPIO 48 RED upon detection
    - Emits 32-byte UDP packet (`0xC5110002`) with `flags |= 0x02` (Bit 1)
 2. **Backend Service**:
    - Performs rising-edge detection (`!prev_fall && fall_detected`)
@@ -88,42 +94,50 @@ Fall detection is processed across both the edge device and the host:
 
 ---
 
-## 5. ESP32-S3 4 MB Flash Instructions
+## 5. ESP32-S3 N16R8 Flash Instructions
 
-### 5.1 Flash Partition Table (`partitions_4mb.csv`)
+### 5.1 Flash Partition Table (`partitions_16mb.csv`)
+The 16 MB partition table provides two generous 4 MB OTA app partitions, 64 KB coredump, and 8 MB FAT storage volume:
+
 ```csv
 # Name,      Type, SubType, Offset,   Size,      Flags
-nvs,         data, nvs,     0x9000,   0x6000,
-otadata,     data, ota,     0xF000,   0x2000,
-phy_init,    data, phy,     0x11000,  0x1000,
-ota_0,       app,  ota_0,   0x20000,  0x1D0000,
-ota_1,       app,  ota_1,   0x1F0000, 0x1D0000,
+nvs,         data, nvs,     0x9000,   24K,
+otadata,     data, ota,     0xF000,   8K,
+phy_init,    data, phy,     0x11000,  4K,
+ota_0,       app,  ota_0,   0x20000,  4M,
+ota_1,       app,  ota_1,   0x420000, 4M,
+coredump,    data, coredump,0x820000, 64K,
+storage,     data, fat,     0x830000, 8000K,
 ```
 
 ### 5.2 Flashing Command (esptool)
-Using the pre-built 4 MB binaries located in `ruview/firmware/esp32-csi-node/release_bins`:
+Using the pre-built binaries located in `ruview/firmware/esp32-csi-node/release_bins`:
 
 ```bash
 python -m esptool --chip esp32s3 --port COM7 --baud 460800 \
-  write_flash --flash_mode dio --flash_size 4MB \
+  write_flash --flash_mode dio --flash_size 16MB \
   0x0     ruview/firmware/esp32-csi-node/release_bins/bootloader.bin \
-  0x8000  ruview/firmware/esp32-csi-node/release_bins/partition-table-4mb.bin \
+  0x8000  ruview/firmware/esp32-csi-node/release_bins/partition-table.bin \
   0xf000  ruview/firmware/esp32-csi-node/release_bins/ota_data_initial.bin \
-  0x20000 ruview/firmware/esp32-csi-node/release_bins/esp32-csi-node-4mb.bin
+  0x20000 ruview/firmware/esp32-csi-node/release_bins/esp32-csi-node.bin
 ```
 
+*(Replace `COM7` with your serial port, e.g. `/dev/ttyUSB0` or `/dev/ttyACM0` on Linux).*
+
 ### 5.3 Building from Source (Docker / ESP-IDF v5.4)
+When building from source for the N16R8 DevKitC, include `sdkconfig.defaults.devkitc` to disable the display probe on floating QSPI pins (fixing the RuView #893 bug and unlocking 40–50 fps CSI yield) along with `sdkconfig.defaults.16mb`:
+
 ```bash
 docker run --rm -v "$(pwd)/ruview/firmware/esp32-csi-node:/project" -w /project \
   espressif/idf:v5.4 bash -c \
-  "rm -rf build sdkconfig && idf.py -D SDKCONFIG_DEFAULTS=\"sdkconfig.defaults;sdkconfig.defaults.4mb\" set-target esp32s3 && idf.py build"
+  "rm -rf build sdkconfig && idf.py -D SDKCONFIG_DEFAULTS=\"sdkconfig.defaults;sdkconfig.defaults.devkitc;sdkconfig.defaults.16mb\" set-target esp32s3 && idf.py build"
 ```
 
 ---
 
 ## 6. Node Wi-Fi & Target Provisioning
 
-Use the official RuView provisioning tool (`provision.py`) to write credentials and backend destination to the NVS partition:
+Use the official RuView provisioning tool (`provision.py`) to write credentials, 40-50Hz rate, 56 subcarriers, and backend destination to the NVS partition:
 
 ```bash
 python ruview/firmware/esp32-csi-node/provision.py \
@@ -135,6 +149,8 @@ python ruview/firmware/esp32-csi-node/provision.py \
   --target-port 5005 \
   --node-id 1 \
   --edge-tier 2 \
+  --vital-int 1000 \
+  --subk-count 56 \
   --fall-thresh 15.0
 ```
 
@@ -279,8 +295,8 @@ Exercises the entire chain: UDP datagram transmission $\rightarrow$ bit-exact pa
 
 ### 10.3 Simulating Hardware Stream
 ```bash
-# Stream continuous CSI (20 Hz) and vitals (1 Hz)
-python scripts/sim_esp32_stream.py --target-ip 127.0.0.1 --target-port 5005 --node-id 1
+# Stream continuous CSI at 40 Hz (ESP32-S3 N16R8 default) and vitals at 1 Hz
+python scripts/sim_esp32_stream.py --target-ip 127.0.0.1 --target-port 5005 --node-id 1 --board esp32s3_n16r8
 
 # Trigger an immediate simulated fall sequence
 python scripts/sim_esp32_stream.py --trigger-fall --node-id 1
@@ -296,6 +312,10 @@ python scripts/sim_esp32_stream.py --trigger-fall --node-id 1
 - **Node appears OFFLINE**:
   - Verify node is associated to the same 2.4 GHz subnet.
   - Check serial monitor at 115200 baud for `UDP sender initialized: <target_ip>:5005`.
-- **4 MB Flash Bootloop**:
-  - Ensure `partitions_4mb.csv` was used and `CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y` is set.
-  - Disable display support (`# CONFIG_DISPLAY_ENABLE is not set`).
+- **N16R8 Flash / Boot issues**:
+  - Ensure `partitions_16mb.csv` was used and `--flash_size 16MB` is specified in `esptool`.
+  - Use `sdkconfig.defaults.devkitc` to disable display probe on floating QSPI pins (RuView #893 bug).
+- **LED Indicators on ESP32-S3 DevKitC-1 N16R8 (GPIO 48)**:
+  - **Blue**: Wi-Fi connecting / syncing
+  - **Green**: Online, streaming CSI frames
+  - **Red**: Fall condition detected (phase acceleration $\ge 15\text{ rad/s}^2$)

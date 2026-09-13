@@ -16,6 +16,7 @@ logger = logging.getLogger("ruview.node_tracker")
 class TrackedNodeState:
     def __init__(self, node_id: str):
         self.node_id = node_id
+        self.board_type: str = "esp32s3_n16r8"
         self.status: NodeStatus = NodeStatus.UNKNOWN
         self.last_seen: Optional[datetime] = None
         self.ip_address: Optional[str] = None
@@ -46,6 +47,7 @@ class NodeTracker:
             result = await session.execute(select(Node))
             for node in result.scalars().all():
                 state = TrackedNodeState(str(node.node_id))
+                state.board_type = getattr(node, "board_type", "esp32s3_n16r8") or "esp32s3_n16r8"
                 state.status = NodeStatus(node.status) if node.status in NodeStatus.__members__ else NodeStatus.UNKNOWN
                 state.room_id = node.room_id
                 state.ip_address = node.ip_address
@@ -133,6 +135,7 @@ class NodeTracker:
                     if node is None:
                         node = Node(
                             node_id=node_id_str,
+                            board_type=state.board_type,
                             status=state.status.value,
                             ip_address=state.ip_address,
                             rssi=state.rssi,
@@ -142,6 +145,7 @@ class NodeTracker:
                         session.add(node)
                     else:
                         node.status = state.status.value
+                        node.board_type = state.board_type
                         node.ip_address = state.ip_address
                         node.rssi = state.rssi
                         node.csi_fps = state.csi_fps_ema

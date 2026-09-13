@@ -85,6 +85,7 @@ async def test_room_and_node_workflow(client: AsyncClient):
     n_data = n_resp.json()
     assert n_data["node_id"] == "esp32s3-01"
     assert n_data["room_id"] == "living_room"
+    assert n_data["board_type"] == "esp32s3_n16r8"
 
     # List nodes
     nodes = await client.get("/api/nodes")

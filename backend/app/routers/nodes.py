@@ -26,10 +26,12 @@ async def list_nodes(db: AsyncSession = Depends(get_db)):
         last_seen = tracked.last_seen if tracked and tracked.last_seen else node.last_seen
         rssi = tracked.rssi if tracked and tracked.rssi is not None else node.rssi
         csi_fps = tracked.csi_fps_ema if tracked and tracked.csi_fps_ema is not None else node.csi_fps
+        board_type = getattr(node, "board_type", "esp32s3_n16r8") or "esp32s3_n16r8"
 
         dto = NodeResponse(
             node_id=node.node_id,
             room_id=node.room_id,
+            board_type=board_type,
             mac_address=node.mac_address,
             firmware_version=node.firmware_version,
             ruview_version=node.ruview_version,
@@ -58,10 +60,12 @@ async def get_node(node_id: str, db: AsyncSession = Depends(get_db)):
     last_seen = tracked.last_seen if tracked and tracked.last_seen else node.last_seen
     rssi = tracked.rssi if tracked and tracked.rssi is not None else node.rssi
     csi_fps = tracked.csi_fps_ema if tracked and tracked.csi_fps_ema is not None else node.csi_fps
+    board_type = getattr(node, "board_type", "esp32s3_n16r8") or "esp32s3_n16r8"
 
     return NodeResponse(
         node_id=node.node_id,
         room_id=node.room_id,
+        board_type=board_type,
         mac_address=node.mac_address,
         firmware_version=node.firmware_version,
         ruview_version=node.ruview_version,
@@ -92,6 +96,7 @@ async def register_node(node_id: str, req: NodeRegisterRequest, db: AsyncSession
         node = Node(
             node_id=node_id_str,
             room_id=req.room_id,
+            board_type=req.board_type or "esp32s3_n16r8",
             mac_address=req.mac_address,
             firmware_version=req.firmware_version or "0.8.12",
             ruview_version="v2655",
@@ -103,6 +108,8 @@ async def register_node(node_id: str, req: NodeRegisterRequest, db: AsyncSession
     else:
         if req.room_id is not None:
             node.room_id = req.room_id
+        if req.board_type is not None:
+            node.board_type = req.board_type
         if req.mac_address is not None:
             node.mac_address = req.mac_address
         if req.firmware_version is not None:
@@ -112,15 +119,17 @@ async def register_node(node_id: str, req: NodeRegisterRequest, db: AsyncSession
     await db.commit()
     await db.refresh(node)
 
-    # Sync room with in-memory tracker
+    # Sync room and board_type with in-memory tracker
     node_tracker.associate_room(node_id_str, req.room_id)
-
     tracked = node_tracker.get_node_state(node_id_str)
+    if tracked and req.board_type:
+        tracked.board_type = req.board_type
     current_status = tracked.status if tracked else NodeStatus(node.status)
 
     return NodeResponse(
         node_id=node.node_id,
         room_id=node.room_id,
+        board_type=node.board_type,
         mac_address=node.mac_address,
         firmware_version=node.firmware_version,
         ruview_version=node.ruview_version,
