@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ruview-fall-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+      - "5005:5005/udp"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - UDP_ENABLED=true
+      - UDP_BIND_HOST=0.0.0.0
+      - UDP_PORT=5005
+      - DATABASE_URL=sqlite+aiosqlite:///./data/fall_detection.db
+      - NODE_OFFLINE_TIMEOUT_S=5.0
+      - FALL_COOLDOWN_MS=5000
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3

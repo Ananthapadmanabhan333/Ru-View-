@@ -1,0 +1,32 @@
+# Virtual environment
+.venv/
+venv/
+ENV/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.pytest_cache/
+
+# Databases & local data
+*.db
+*.sqlite
+*.sqlite3
+backend/data/
+backend/fall_detection.db
+fall_detection.db
+
+# Environment variables
+.env
+!.env.example
+backend/.env
+!backend/.env.example
+
+# OS / Editor files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
