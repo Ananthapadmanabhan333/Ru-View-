@@ -184,6 +184,38 @@ async def api_v1_pose_stats():
     }
 
 
+@router.get("/api/v1/pose/zones/summary")
+async def api_v1_pose_zones_summary():
+    return {
+        "zones": [
+            {"zone_id": "zone_1", "name": "Living Area", "occupancy": 1, "status": "active"},
+            {"zone_id": "zone_2", "name": "Hallway", "occupancy": 0, "status": "clear"},
+        ],
+        "total_occupancy": 1,
+    }
+
+
+@router.get("/api/v1/pose/zones/{zone_id}/occupancy")
+async def api_v1_pose_zone_occupancy(zone_id: str):
+    return {"zone_id": zone_id, "occupancy": 1 if zone_id == "zone_1" else 0}
+
+
+@router.get("/api/v1/pose/activities")
+async def api_v1_pose_activities():
+    return {
+        "activities": [
+            {"name": "standing", "confidence": 0.85},
+            {"name": "walking", "confidence": 0.10},
+            {"name": "sitting", "confidence": 0.05},
+        ]
+    }
+
+
+@router.get("/api/v1/pose/historical")
+async def api_v1_pose_historical():
+    return {"history": []}
+
+
 @router.get("/api/v1/stream/status")
 async def api_v1_stream_status():
     return {

@@ -43,12 +43,12 @@ class RuViewWebSocketClient:
         reconnect_delay = 2.0
         while self._running:
             try:
-                headers = {}
+                connect_kwargs = {}
                 if settings.RUVIEW_API_TOKEN:
-                    headers["Authorization"] = f"Bearer {settings.RUVIEW_API_TOKEN}"
+                    connect_kwargs["additional_headers"] = {"Authorization": f"Bearer {settings.RUVIEW_API_TOKEN}"}
 
                 logger.info(f"Connecting to upstream RuView WebSocket: {self.ws_url}")
-                async with websockets.connect(self.ws_url, extra_headers=headers) as ws:
+                async with websockets.connect(self.ws_url, **connect_kwargs) as ws:
                     self._connected = True
                     reconnect_delay = 2.0
                     logger.info("Connected to upstream RuView sensing-server!")
